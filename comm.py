@@ -143,14 +143,19 @@ def generate_sample(stage="offline_train"):
             df = df.drop_duplicates(subset=['userid', 'feedid', action], keep='last')
         # 负样本下采样
         for action in ACTION_LIST:
+            # 选取时间范围内的用户行为
             action_df = df[(df["date_"] <= day) & (df["date_"] >= day - ACTION_DAY_NUM[action] + 1)]
+            # 负样本
             df_neg = action_df[action_df[action] == 0]
             df_neg = df_neg.sample(frac=1.0/ACTION_SAMPLE_RATE[action], random_state=SEED, replace=False)
+            # 连接负样本和正样本
             df_all = pd.concat([df_neg, action_df[action_df[action] == 1]])
             col = ["userid", "feedid", "date_", "device"] + [action]
             file_name = os.path.join(stage_dir, stage + "_" + action + "_" + str(day) + "_generate_sample.csv")
+            # 每个action生成一张表
             print('Save to: %s'%file_name)
             df_all[col].to_csv(file_name, index=False)
+            # 不同的action存在不同的csv文件中，但拼接成一个df从函数返回
             df_arr.append(df_all[col])
     return df_arr
 
@@ -161,6 +166,7 @@ def concat_sample(sample_arr, stage="offline_train"):
     :param sample_arr: List of sample df
     :param stage: String. Including "online_train"/"offline_train"/"evaluate"/"submit"
     """
+    # 这里的day是当前stage下训练数据集的最后一天
     day = STAGE_END_DAY[stage]
     # feed信息表
     feed_info = pd.read_csv(FEED_INFO)
@@ -182,16 +188,18 @@ def concat_sample(sample_arr, stage="offline_train"):
             features += ACTION_LIST
         elif stage == "submit":
             action = "all"
-        else:
+        else:   # 训练阶段，只有一种action
             action = ACTION_LIST[index]
             features += [action]
         print("action: ", action)
+        # on：连接的列，默认索引连接 ；how：连接方式。默认左连接；rsuffix：右DataFrame中重复列的后缀
+        # 对每种action的sample（主要是USer Action数据），连接其他feed信息
         sample = sample.join(feed_info, on="feedid", how="left", rsuffix="_feed")
         sample = sample.join(feed_date_feature, on=["feedid", "date_"], how="left", rsuffix="_feed")
         sample = sample.join(user_date_feature, on=["userid", "date_"], how="left", rsuffix="_user")
         feed_feature_col = [b+"sum" for b in FEA_COLUMN_LIST]
         user_feature_col = [b+"sum_user" for b in FEA_COLUMN_LIST]
-        sample[feed_feature_col] = sample[feed_feature_col].fillna(0.0)
+        sample[feed_feature_col] = sample[feed_feature_col].fillna(0.0)     # 填充空缺值
         sample[user_feature_col] = sample[user_feature_col].fillna(0.0)
         sample[feed_feature_col] = np.log(sample[feed_feature_col] + 1.0)
         sample[user_feature_col] = np.log(sample[user_feature_col] + 1.0)

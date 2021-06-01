@@ -34,6 +34,7 @@ class WideAndDeep(object):
         :param action: String. Including "read_comment"/"like"/"click_avatar"/"favorite"/"forward"/"comment"/"follow"
         """
         super(WideAndDeep, self).__init__()
+        # 通过dict来迭代选择训练单个action的epoch数
         self.num_epochs_dict = {"read_comment": 1, "like": 1, "click_avatar": 1, "favorite": 1, "forward": 1,
                                 "comment": 1, "follow": 1}
         self.estimator = None
@@ -58,6 +59,7 @@ class WideAndDeep(object):
         optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate, beta1=0.9, beta2=0.999,
                                            epsilon=1)
         config = tf.estimator.RunConfig(model_dir=model_checkpoint_stage_dir, tf_random_seed=SEED)
+        # 深度神经网络线性组合分类器
         self.estimator = tf.estimator.DNNLinearCombinedClassifier(
             model_dir=model_checkpoint_stage_dir,
             linear_feature_columns=self.linear_feature_columns,
@@ -83,11 +85,12 @@ class WideAndDeep(object):
         print("num_epochs: ", num_epochs)
         if stage != "submit":
             label = df[action]
-            ds = tf.data.Dataset.from_tensor_slices((dict(df), label))
+            ds = tf.data.Dataset.from_tensor_slices((dict(df), label))      # 把给定的元组、列表和张量等数据进行特征切片
         else:
             ds = tf.data.Dataset.from_tensor_slices((dict(df)))
         if shuffle:
             ds = ds.shuffle(buffer_size=len(df), seed=SEED)
+        # ? 返回的是一个batch还是整个ds
         ds = ds.batch(batch_size)
         if stage in ["online_train", "offline_train"]:
             ds = ds.repeat(num_epochs)
@@ -104,10 +107,12 @@ class WideAndDeep(object):
         """
         训练单个行为的模型
         """
+        # 这里取出的信息是comm.py在concat_sample中存储的训练数据
         file_name = "{stage}_{action}_{day}_concate_sample.csv".format(stage=self.stage, action=self.action,
                                                                       day=STAGE_END_DAY[self.stage])
         stage_dir = os.path.join(FLAGS.root_path, self.stage, file_name)
         df = pd.read_csv(stage_dir)
+        # estimator是一个线性组合分类器
         self.estimator.train(
             input_fn=lambda: self.input_fn_train(df, self.stage, self.action, self.num_epochs_dict[self.action])
         )
@@ -170,7 +175,7 @@ def del_file(path):
             print("del: ", c_path)
             os.remove(c_path)
 
-
+# ?并没有看懂
 def get_feature_columns():
     '''
     获取特征列
